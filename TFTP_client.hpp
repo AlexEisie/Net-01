@@ -14,7 +14,7 @@
 #define server_port 69
 #define slicelenth 512	//文件分片大小必须是512，不然不会接收
 #define tftp_timeout 500
-
+#define max_retrytimes 3
 using namespace std;
 enum msg_kind
 {
@@ -33,20 +33,32 @@ enum t_status
 	ok = 0
 };
 
+enum tftp_status
+{
+	tftp_err_max_retrytimes = -1,
+	tftp_err_not_expected_pkt = -1,
+	tftp_err_get_error_Opcode = -1,
+	tftp_pkt_ok = 0
+};
+
 class TFTP_msg
 {
 public:
-	char sendbuf[1200];
-	char recvbuf[1200];
+	struct pkt {
+		char data[1200];
+		int lenth;
+	};
+	struct pkt sendpkt;
+	struct pkt recvpkt;
 	SOCKET client;
 	struct sockaddr_in* server_addr;
 	int server_addr_length;
 
 	TFTP_msg(SOCKET c, struct sockaddr_in* s, msg_kind Opcode)
 	{
-		memset(sendbuf, 0, sizeof(sendbuf));
-		memset(recvbuf, 0, sizeof(recvbuf));
-		*(__int8*)(sendbuf + 1) = (__int8)Opcode;
+		memset(&sendpkt, 0, sizeof(sendpkt));
+		memset(&recvpkt, 0, sizeof(recvpkt));
+		*(__int8*)(sendpkt.data + 1) = (__int8)Opcode;
 		client = c;
 		server_addr = s;
 		server_addr_length = sizeof(*server_addr);
@@ -54,53 +66,55 @@ public:
 
 	t_status TFTP_readfile(const char* file_name, const char* ts_mode, ofstream& file)
 	{
-		int pktlenth = 0;
-		__int16 pktnum = 0;
-		bool done = 0;
-		strcpy(sendbuf + 2, file_name);
-		strcpy(sendbuf + 2 + strlen(file_name) + 1, ts_mode);
-		pktlenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
-		if (sendto(client, sendbuf, pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
-			return sendwrong;
-		
-		while (1)
-		{
-			if ((pktlenth = recvfrom(client, recvbuf, sizeof(recvbuf), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
-				return recvwrong;
-			else
-				if (*(__int8*)(recvbuf + 1) != (__int8)msg_DATA )
-					return wrongstep;
-			*(__int8*)&pktnum = *(__int8*)(recvbuf + 3);
-			*((__int8*)&pktnum+1) = *(__int8*)(recvbuf + 2);
-			file.write(recvbuf + 4, pktlenth - 4);
+		//int pktlenth = 0;
+		//__int16 pktnum = 0;
+		//bool done = 0;
+		//strcpy(sendbuf + 2, file_name);
+		//strcpy(sendbuf + 2 + strlen(file_name) + 1, ts_mode);
+		//pktlenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
+		//if (sendto(client, sendbuf, pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
+		//	return sendwrong;
+		//
+		//while (1)
+		//{
+		//	if ((pktlenth = recvfrom(client, recvbuf, sizeof(recvbuf), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
+		//		return recvwrong;
+		//	else
+		//		if (*(__int8*)(recvbuf + 1) != (__int8)msg_DATA )
+		//			return wrongstep;
+		//	*(__int8*)&pktnum = *(__int8*)(recvbuf + 3);
+		//	*((__int8*)&pktnum+1) = *(__int8*)(recvbuf + 2);
+		//	file.write(recvbuf + 4, pktlenth - 4);
 
-			if (pktlenth-4 < 512)
-				done = 1;
-			cout << "pkt=" << pktnum << "尝试接收:" << pktlenth - 4 << "字节....";
+		//	if (pktlenth-4 < 512)
+		//		done = 1;
+		//	cout << "pkt=" << pktnum << "尝试接收:" << pktlenth - 4 << "字节....";
 
 
-			memset(sendbuf, 0, sizeof(sendbuf));
-			*((__int8*)sendbuf + 1) = (__int8)msg_ACK;
-			*(__int8*)(sendbuf + 2) = *((__int8*)&pktnum + 1);		//高低端转换
-			*(__int8*)(sendbuf + 3) = *(__int8*)&pktnum;
-			pktlenth = 4;
-			if (sendto(client, sendbuf, pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
-				return sendwrong;
-			cout << "成功！" << endl;
+		//	memset(sendbuf, 0, sizeof(sendbuf));
+		//	*((__int8*)sendbuf + 1) = (__int8)msg_ACK;
+		//	*(__int8*)(sendbuf + 2) = *((__int8*)&pktnum + 1);		//高低端转换
+		//	*(__int8*)(sendbuf + 3) = *(__int8*)&pktnum;
+		//	pktlenth = 4;
+		//	if (sendto(client, sendbuf, pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
+		//		return sendwrong;
+		//	cout << "成功！" << endl;
 
-			if (done)
-				break;
-		}
+		//	if (done)
+		//		break;
+		//}
 		return ok;
 	}
 
 	t_status TFTP_writefile(const char* file_name, const char* ts_mode, ifstream& file)
 	{
-		int pktlenth = 0;
 		int filelength = 0;
-		__int16 pktnum = 1;
+		__int16 pktnum = 0;
 		bool done = 0;
-		__int64 pkt_time;
+		__int64 timer;
+
+		int* spktlenth = &sendpkt.lenth;
+		int* rpktlenth = &recvpkt.lenth;
 		future_status f_sendto_status;
 		future_status f_recvfrom_status;
 		//计算文件总大小
@@ -111,62 +125,91 @@ public:
 		//WRQ报文发，ACK报文收
 
 		//构建WRQ报文
-		strcpy(sendbuf + 2, file_name);
-		strcpy(sendbuf + 2 + strlen(file_name) + 1, ts_mode);
-		pktlenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
-
-		future<void> f_sendto = async(launch::async, [&pktlenth,this]() {trysendto(&pktlenth);});
+		strcpy(sendpkt.data + 2, file_name);
+		strcpy(sendpkt.data + 2 + strlen(file_name) + 1, ts_mode);
+		sendpkt.lenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
+		
+		future<void> f_sendto = async(launch::async, [spktlenth,this]() {trysendto(spktlenth);});
 		f_sendto.wait();
+		
+		timer = timeGetTime();	//启动定时器
+		future<void> f_recvfrom = async(launch::async, [rpktlenth,this]() {tryrecvfrom(rpktlenth);});
 
-		pkt_time = timeGetTime();
-		future<void> f_recvfrom = async(launch::async, [&pktlenth, this]() {tryrecvfrom(&pktlenth);});
-		for(int retrytimes=0;retrytimes<3;)
+		for(int retrytimes=0;retrytimes<=max_retrytimes;)
 		{
-			if (timeGetTime() - pkt_time >= tftp_timeout)
+			if (timeGetTime() - timer >= tftp_timeout)
 			{
-				future<void> f_sendto = async(launch::async, [&pktlenth, this]() {trysendto(&pktlenth); });
+				if (++retrytimes > max_retrytimes)
+				{
+					cout <<"LINE:" << __LINE__ << " 达到最大重传次数" << endl;
+					exit(tftp_err_max_retrytimes);
+				}
+				future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 				f_sendto.wait();
-				pkt_time = timeGetTime();
-				retrytimes++;
+				timer = timeGetTime();
 			}
+
 			f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
-			if (f_recvfrom_status == future_status::ready)
-				break;
-			if (retrytimes == 3)
+			if (f_recvfrom_status == future_status::ready&&recvpkt.lenth!=-1&&check_recvptk(msg_ACK,pktnum)==tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
 			{
-				exit(1);
+				 break;
 			}
 ;		}
 		f_recvfrom.wait();
+		pktnum++;
 		cout << "OK";
 		//else
 		//	if (*(__int8*)(recvbuf + 1) != (__int8)msg_ACK)
 		//		return wrongstep;
 		// 
-		//从序号1开始传数据
+		//从序号1开始传DATA
 		while (1)
 		{
-			memset(sendbuf, 0, sizeof(sendbuf));
-			*(__int8*)(sendbuf + 1) = (__int8)msg_DATA;
-			*(__int8*)(sendbuf + 2) = *((__int8*)&pktnum + 1);		//高低端转换
-			*(__int8*)(sendbuf + 3) = *(__int8*)&pktnum;
-			file.read(sendbuf + 4, slicelenth);
+			//构造发送DATA包
+			memset(&sendpkt, 0, sizeof(sendpkt));
+			*(__int8*)(sendpkt.data + 1) = (__int8)msg_DATA;
+			*(__int8*)(sendpkt.data + 2) = *((__int8*)&pktnum + 1);		//高低端转换
+			*(__int8*)(sendpkt.data + 3) = *(__int8*)&pktnum;
+			file.read(sendpkt.data + 4, slicelenth);
 			if (filelenth >= slicelenth)		//更新filelenth,计算pktlenth
 			{
 				filelenth -= slicelenth;
-				pktlenth = 4 + slicelenth;
+				sendpkt.lenth = 4 + slicelenth;
 			}
 			else
 			{
 				done = 1;
-				pktlenth = 4 + filelenth;
+				sendpkt.lenth = 4 + filelenth;
 			}
 			
-			future<void> f_sendto = async(launch::async, [&pktlenth, this]() {trysendto(&pktlenth); });
+			future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 			f_sendto.wait();
-			cout << "pktnum=" <<pktnum<< "尝试发送:" << pktlenth - 4 << "字节....";
+			cout << "pktnum=" <<pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据....";
 
-			future<void> f_recvfrom = async(launch::async, [&pktlenth, this]() {tryrecvfrom(&pktlenth); });
+			//尝试接收ACK
+			timer = timeGetTime();	//启动定时器
+			future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
+
+			for (int retrytimes = 0; retrytimes <= max_retrytimes;)
+			{
+				if (timeGetTime() - timer >= tftp_timeout)
+				{
+					if (++retrytimes > max_retrytimes)
+					{
+						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
+						exit(tftp_err_max_retrytimes);
+					}
+					future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+					f_sendto.wait();
+					timer = timeGetTime();
+				}
+
+				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
+				if (f_recvfrom_status == future_status::ready && recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+				{
+					break;
+				}
+			}
 			f_recvfrom.wait();
 			cout << "成功！" << endl;
 			pktnum++;
@@ -179,15 +222,29 @@ public:
 private:
 	t_status trysendto(int *pktlenth)
 	{
-		if (sendto(client, sendbuf, *pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
+		if (sendto(client, sendpkt.data, *pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
 			return sendwrong;
 		return ok;
 	}
 
 	t_status tryrecvfrom(int* pktlenth)
 	{
-		if ((*pktlenth = recvfrom(client, recvbuf, sizeof(recvbuf), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
+		if ((*pktlenth = recvfrom(client, recvpkt.data, sizeof(recvpkt.data), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
 			return recvwrong;
 		return ok;
+	}
+
+	tftp_status check_recvptk(msg_kind Opcode, __int16 pktnum)
+	{
+		if (*(__int8*)(recvpkt.data + 1) == (__int8)Opcode)
+			return tftp_pkt_ok;
+		else if (*(__int8*)(recvpkt.data + 1) == (__int8)msg_ERROR)
+		{
+			cout << "收到Opcode=ERROR:" << recvpkt.data + 2 << endl;
+			exit(tftp_err_get_error_Opcode);
+			return tftp_err_get_error_Opcode;
+		}
+		else
+			return tftp_err_not_expected_pkt;
 	}
 };

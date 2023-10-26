@@ -4,7 +4,7 @@
 #undef server_port
 #undef slicelenth
 
-#define server_ip "10.10.10.10"
+#define server_ip "127.0.0.1"
 #define server_port 69
 #define slicelenth 512
 
