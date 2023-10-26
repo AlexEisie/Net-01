@@ -73,6 +73,8 @@ public:
 
 		int* spktlenth = &sendpkt.lenth;
 		int* rpktlenth = &recvpkt.lenth;
+		future<void> f_sendto;
+		future<void> f_recvfrom;
 		future_status f_sendto_status;
 		future_status f_recvfrom_status;
 
@@ -82,27 +84,29 @@ public:
 		strcpy(sendpkt.data + 2, file_name);
 		strcpy(sendpkt.data + 2 + strlen(file_name) + 1, ts_mode);
 		sendpkt.lenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
-
-		future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+		
+		f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 		f_sendto.wait();
-
+		
 		//从序号1开始收DATA
 		while (1)
 		{
+
 			//尝试接收DATA
 			timer = timeGetTime();	//启动定时器
-			future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
+			f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
 
 			for (int retrytimes = 0; retrytimes <= max_retrytimes;)
 			{
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
+
 					if (++retrytimes > max_retrytimes)
 					{
 						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 						exit(tftp_err_max_retrytimes);
 					}
-					future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 					f_sendto.wait();
 					timer = timeGetTime();
 				}
@@ -116,7 +120,7 @@ public:
 					{
 						cout << "wrong packet!" << endl;
 						f_recvfrom.wait();
-						future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
+						f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
 					}
 				}
 			}
@@ -133,7 +137,7 @@ public:
 			*(__int8*)(sendpkt.data + 3) = *(__int8*)&pktnum;
 			sendpkt.lenth = 4;
 
-			future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 			f_sendto.wait();
 			cout << "成功！" << endl;
 
@@ -154,6 +158,8 @@ public:
 
 		int* spktlenth = &sendpkt.lenth;
 		int* rpktlenth = &recvpkt.lenth;
+		future<void> f_sendto;
+		future<void> f_recvfrom;
 		future_status f_sendto_status;
 		future_status f_recvfrom_status;
 
@@ -169,26 +175,26 @@ public:
 		strcpy(sendpkt.data + 2 + strlen(file_name) + 1, ts_mode);
 		sendpkt.lenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
 		
-		future<void> f_sendto = async(launch::async, [spktlenth,this]() {trysendto(spktlenth);});
+		f_sendto = async(launch::async, [spktlenth,this]() {trysendto(spktlenth);});
 		f_sendto.wait();
 		
 		timer = timeGetTime();	//启动定时器
-		future<void> f_recvfrom = async(launch::async, [rpktlenth,this]() {tryrecvfrom(rpktlenth);});
+		f_recvfrom = async(launch::async, [rpktlenth,this]() {tryrecvfrom(rpktlenth);});
 
 		for(int retrytimes=0;retrytimes<=max_retrytimes;)
 		{
 			if (timeGetTime() - timer >= tftp_timeout)
 			{
+
 				if (++retrytimes > max_retrytimes)
 				{
 					cout <<"LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 					exit(tftp_err_max_retrytimes);
 				}
-				future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+				f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 				f_sendto.wait();
 				timer = timeGetTime();
 			}
-
 			f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
 			if (f_recvfrom_status == future_status::ready)
 			{
@@ -197,7 +203,7 @@ public:
 				else
 				{
 					f_recvfrom.wait();
-					future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
+					f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
 				}
 			}
 ;		}
@@ -224,13 +230,13 @@ public:
 				sendpkt.lenth = 4 + filelenth;
 			}
 			
-			future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 			f_sendto.wait();
 			cout << "pktnum=" <<pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据....";
 
 			//尝试接收ACK
 			timer = timeGetTime();	//启动定时器
-			future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
+			f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
 
 			for (int retrytimes = 0; retrytimes <= max_retrytimes;)
 			{
@@ -241,7 +247,7 @@ public:
 						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 						exit(tftp_err_max_retrytimes);
 					}
-					future<void> f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
+					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 					f_sendto.wait();
 					timer = timeGetTime();
 				}
@@ -254,7 +260,7 @@ public:
 					else
 					{
 						f_recvfrom.wait();
-						future<void> f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
+						f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
 					}
 				}
 			}

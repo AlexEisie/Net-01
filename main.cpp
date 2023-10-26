@@ -45,7 +45,7 @@ int main()
 		}
 
 		TFTP_msg testwrite(client, &server_addr, msg_WRQ);
-		if(testwrite.TFTP_writefile("c.txt", "netascii", local_file)==ok)
+		if(testwrite.TFTP_writefile("a.txt", "netascii", local_file)==ok)
 			cout<<"向服务器写成功！"<<endl;
 		local_file.close();
 	}
