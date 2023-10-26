@@ -51,9 +51,28 @@ int main()
 	}
 	else
 	{
-		ofstream local_file("D:\\VisualStudio\\C++PRO\\NN-01\\b.txt", ios::in);
+		const char local_file_name[] = "D:\\VisualStudio\\C++PRO\\NN-01\\b.txt";
+		ifstream check_file(local_file_name, ios::in);
+		if (check_file.good())
+		{
+			// 如果文件存在
+			char choice;
+			cout << "文件已存在。是否重新创建文件 (y/n)? ";
+			cin >> choice;
+
+			if (choice == 'y' || choice == 'Y') {
+				check_file.close();
+				remove(local_file_name);  // 删除文件
+			}
+			else {
+				cout << "未重新创建文件。" << endl;
+				check_file.close();
+				return 0;
+			}
+		}
+		ofstream local_file(local_file_name, ios::out);
 		if (!local_file.is_open()) {
-			cout << "无法打开文件" << std::endl;
+			cout << "无法创建或打开文件" << std::endl;
 			return -1;
 		}
 
@@ -71,5 +90,5 @@ int main()
 
 int menu(char *file_name)
 {
-	return 1;
+	return 2;
 }
