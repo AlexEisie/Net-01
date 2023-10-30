@@ -21,6 +21,12 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="TFTP_Log.hpp">
+      <Filter>头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="TFTP_INFO.hpp">
+      <Filter>头文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TFTP_client.hpp">
