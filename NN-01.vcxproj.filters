@@ -27,10 +27,16 @@
     <ClCompile Include="TFTP_INFO.hpp">
       <Filter>头文件</Filter>
     </ClCompile>
+    <ClCompile Include="TFTP_menu.hpp">
+      <Filter>头文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TFTP_client.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="todolist.txt" />
   </ItemGroup>
 </Project>

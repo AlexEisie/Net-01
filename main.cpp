@@ -8,7 +8,8 @@
 #define server_port 69
 #define slicelenth 512
 
-const char log_file_name[] = "D:\\VisualStudio\\C++PRO\\NN-01\\tftpclient.log";
+//const char log_file_name[] = "D:\\VisualStudio\\C++PRO\\NN-01\\tftpclient.log";
+const char log_file_name[] = "tftpclient.log";
 ofstream TFTP_Log::log_file(log_file_name, ios::out | ios::app);
 
 int menu(char*);
@@ -49,12 +50,17 @@ int main()
 	}
 
 	//选择操作开始运行
-	char file_name[128];
+	char local_file_name[128];
+	char remote_file_name[128];
 	start:
-	if (menu(file_name) == 1)
+	if (menu(local_file_name) == 1)
 	{
+		cout << "输入想要发送的本地文件路径:";
+		cin >> local_file_name;
+		cout << "输入想要发送的远端文件路径:";
+		cin >> remote_file_name;
 		//向服务器写文件Write
-		ifstream local_file("D:\\VisualStudio\\C++PRO\\NN-01\\a.txt", ios::in);
+		ifstream local_file(local_file_name, ios::in| ios::binary);	//这里加入binary模式是因为如果默认使用文本格式会丢弃\n
 		try 
 		{
 			if (!local_file.is_open()) {
@@ -62,7 +68,7 @@ int main()
 				TFTP_INFO("无法打开本地文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 			}
 			TFTP_msg testwrite(client, &server_addr, msg_WRQ);
-			if (testwrite.TFTP_writefile("a.txt", "netascii", local_file) == ok)
+			if (testwrite.TFTP_writefile(remote_file_name, "octet", local_file) == ok)
 				cout << "向服务器写成功！" << endl;
 			local_file.close();
 		}
@@ -75,9 +81,13 @@ int main()
 	}
 	else
 	{
+		cout << "输入想要接收的本地文件路径:";
+		cin >> local_file_name;
+		cout << "输入想要接收的远端文件路径:";
+		cin >> remote_file_name;
 		//向服务器读文件Read
-		const char local_file_name[] = "D:\\VisualStudio\\C++PRO\\NN-01\\b.txt";
-		ifstream check_file(local_file_name, ios::in);
+		//const char local_file_name[] = "D:\\VisualStudio\\C++PRO\\NN-01\\b.txt";
+		ifstream check_file(local_file_name, ios::in | ios::binary);
 		if (check_file.good())
 		{
 			// 如果文件存在
@@ -95,7 +105,7 @@ int main()
 				return 0;
 			}
 		}
-		ofstream local_file(local_file_name, ios::out);
+		ofstream local_file(local_file_name, ios::out | ios::binary);
 		try
 		{
 			if (!local_file.is_open()) {
@@ -103,7 +113,7 @@ int main()
 			}
 
 			TFTP_msg testread(client, &server_addr, msg_RRQ);
-			if (testread.TFTP_readfile("a.txt", "netascii", local_file) == ok)
+			if (testread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
 				cout << "向服务器读成功！" << endl;
 			local_file.close();
 		}

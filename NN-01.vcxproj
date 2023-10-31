@@ -131,9 +131,13 @@
     <ClCompile Include="test.cpp" />
     <ClCompile Include="TFTP_INFO.hpp" />
     <ClCompile Include="TFTP_Log.hpp" />
+    <ClCompile Include="TFTP_menu.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TFTP_client.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="todolist.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

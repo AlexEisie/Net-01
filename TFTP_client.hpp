@@ -130,7 +130,7 @@ public:
 			transLenth += recvpkt.lenth;
 			if (recvpkt.lenth - 4 < 512)
 				done = 1;
-			cout << "pkt=" << (unsigned int)pktnum << "确认接收:" << recvpkt.lenth - 4 << "字节数据....";
+			cout << "\rpktnum=" << (uint16_t)pktnum << "确认接收:" << recvpkt.lenth - 4 << "字节数据...."<<flush;
 			file.write(recvpkt.data+ 4, recvpkt.lenth - 4);
 			
 			//构造发送ACK
@@ -142,7 +142,7 @@ public:
 
 			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 			f_sendto.wait();
-			cout << "成功！" << endl;
+			cout << "成功！        " << flush;
 
 			pktnum++;
 			if (done)
@@ -152,7 +152,7 @@ public:
 		user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
 		user_msg += "s获取了:" + to_string(transLenth);
 		user_msg += "bytes";
-		cout << user_msg << endl;
+		cout << endl<<user_msg << endl;
 		TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
 	}
@@ -173,6 +173,9 @@ public:
 		future<void> f_recvfrom;
 		future_status f_sendto_status;
 		future_status f_recvfrom_status;
+
+		//string proced;
+		//future<void> f_proced;
 
 		//计算文件总大小
 		file.seekg(0, std::ios::end);
@@ -241,10 +244,12 @@ public:
 				sendpkt.lenth = 4 + filelenth;
 			}
 			transLenth += sendpkt.lenth;
-			
+
+			//f_proced = async(launch::async, [transLenth, filelenth, &proced, this]() {cal_process(transLenth, filelenth, proced); });
+
 			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
 			f_sendto.wait();
-			cout << "pktnum=" <<(unsigned int)pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据....";
+			cout << "\rpktnum=" << (uint16_t)pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据...."<<flush;
 
 			//尝试接收ACK
 			timer = timeGetTime();	//启动定时器
@@ -278,7 +283,7 @@ public:
 				}
 			}
 			f_recvfrom.wait();
-			cout << "成功！" << endl;
+			cout << "成功！             " <<flush;
 			pktnum++;
 
 			if (done)
@@ -288,7 +293,7 @@ public:
 				user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
 				user_msg += "s发送了:" + to_string(transLenth);
 				user_msg += "bytes";
-		cout << user_msg<<endl;
+		cout << endl <<user_msg<<endl;
 		TFTP_INFO(user_msg.c_str(),(TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
 	}
@@ -326,9 +331,24 @@ private:
 		}
 		else
 		{
-			cout << "收到意料之外的分组";
+			cout << endl<<"收到意料之外的分组"<<endl;
 			TFTP_INFO("收到意料之外的分组", TFTP_INFO::RECVED_UNEXPECTED_PACKET, __LINE__, __func__);
 			return tftp_err_not_expected_pkt;
 		}
+	}
+	//进度计算与进度条生成
+	void cal_process(int transed,int left,string& str)
+	{
+		double perc = (double)transed / (transed + left);
+		int filled_num = perc * 20;
+		string processBar(20, '-');
+
+		for (int i = 0; i < filled_num; i++)
+		{
+			processBar[i] = '#';
+		}
+
+		str = "[" + processBar + "] " + to_string(perc*100) +"%";
+		//str = to_string(perc);
 	}
 };
