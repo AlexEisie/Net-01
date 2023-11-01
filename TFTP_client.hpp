@@ -11,13 +11,12 @@
 #pragma comment(lib, "winmm.lib")
 #pragma warning(disable : 4996)
 
-#define server_ip "127.0.0.1"
-#define server_port 69
-#define slicelenth 512	//文件分片大小必须是512，不然不会接收
-//#define tftp_timeout 700
-long long default_timeout = 500;
-long long tftp_timeout = default_timeout;//发生超时*2,接收成功恢复
-#define max_retrytimes 5
+extern int slicelenth;
+extern long long default_timeout;
+extern int max_retrytimes;
+
+long long tftp_timeout = default_timeout;  //发生超时*2,接收成功恢复
+
 using namespace std;
 enum msg_kind
 {
@@ -155,9 +154,11 @@ public:
 				break;
 		}
 		string user_msg("已完成一个文件的获取,共耗时:");
-		user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
-		user_msg += "s获取了:" + to_string(transLenth);
-		user_msg += "bytes";
+				user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
+				user_msg += "s获取了:" + to_string(transLenth);
+				user_msg += "bytes";
+				user_msg += "平均吞吐量为:";
+				user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
 		cout << endl<<user_msg << endl;
 		TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
@@ -297,7 +298,7 @@ public:
 				}
 			}
 			f_recvfrom.wait();
-			cout << "成功！             " <<flush;
+			cout << "成功！             " << cal_process(transLenth,filelenth) <<flush;
 			pktnum++;
 
 			if (done)
@@ -307,6 +308,8 @@ public:
 				user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
 				user_msg += "s发送了:" + to_string(transLenth);
 				user_msg += "bytes";
+				user_msg += "平均吞吐量为:";
+				user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
 		cout << endl <<user_msg<<endl;
 		TFTP_INFO(user_msg.c_str(),(TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
@@ -351,10 +354,10 @@ private:
 		}
 	}
 	//进度计算与进度条生成
-	void cal_process(int transed,int left,string& str)
+	string cal_process(int transed,int left)
 	{
-		double perc = (double)transed / (transed + left);
-		int filled_num = perc * 20;
+		float perc = (float)transed / (transed + left);
+		int filled_num = perc * 20+1;
 		string processBar(20, '-');
 
 		for (int i = 0; i < filled_num; i++)
@@ -362,12 +365,24 @@ private:
 			processBar[i] = '#';
 		}
 
-		str = "[" + processBar + "] " + to_string(perc*100) +"%";
-		//str = to_string(perc);
+		return  "[" + processBar + "] " + to_string((int)(perc*100+1)) +"%      ";
 	}
 	//总吞吐量计算
-	void cal_rate(int transLenth,string& cost_time)
+	string cal_rate(int transLenth,double cost_time)
 	{
-
+		char units[3][8] = { "B/s","KB/s","MB/s" };
+		int unit = 0;
+		double speed = (double)transLenth / cost_time;
+		if (speed >= 1024)
+		{
+			unit++;		//->KB
+			speed = speed / 1024;
+			if (speed >= 1024)
+			{
+				unit++;		//->MB
+				speed = speed / 1024;
+			}
+		}
+		return to_string(speed) + (string)units[unit];
 	}
 };
