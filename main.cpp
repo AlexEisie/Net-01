@@ -18,8 +18,21 @@ int main()
 {
 	//测试日志文件可用性
 	TFTP_Log test_log (TFTP_Log::create);
-	//程序启动和初始化操作
+	//程序启动
 	TFTP_INFO("程序启动",(TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__,__func__);
+
+	/*while (true)
+	{
+		TFTP_Menu menu;
+		return 0;
+		int choice = menu.choose();
+
+		menu.getSubMenu()->getInput(local_file_name, remote_file_name);
+	}*/
+
+	//初始化操作
+	char local_file_name[128];
+	char remote_file_name[128];
 	WSADATA wsa_data;
 	SOCKET client;						//套接字
 	struct sockaddr_in server_addr;		//服务器地址结构体
@@ -50,8 +63,6 @@ int main()
 	}
 
 	//选择操作开始运行
-	char local_file_name[128];
-	char remote_file_name[128];
 	start:
 	if (menu(local_file_name) == 1)
 	{

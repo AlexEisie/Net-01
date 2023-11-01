@@ -8,14 +8,16 @@
 #include <ctime>
 #include "TFTP_INFO.hpp"
 #pragma comment(lib,"ws2_32.lib")
-#pragma comment(lib, "winmm.lib ")
+#pragma comment(lib, "winmm.lib")
 #pragma warning(disable : 4996)
 
 #define server_ip "127.0.0.1"
 #define server_port 69
 #define slicelenth 512	//文件分片大小必须是512，不然不会接收
-#define tftp_timeout 500
-#define max_retrytimes 3
+//#define tftp_timeout 700
+long long default_timeout = 500;
+long long tftp_timeout = default_timeout;//发生超时*2,接收成功恢复
+#define max_retrytimes 5
 using namespace std;
 enum msg_kind
 {
@@ -103,6 +105,7 @@ public:
 			{
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
+					tftp_timeout = tftp_timeout * 2;
 					TFTP_INFO("ACK包发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
@@ -118,7 +121,10 @@ public:
 				if (f_recvfrom_status == future_status::ready)
 				{
 					if (recvpkt.lenth != -1 && check_recvptk(msg_DATA, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+					{
+						tftp_timeout =default_timeout;
 						break;
+					}
 					else
 					{
 						f_recvfrom.wait();
@@ -199,6 +205,7 @@ public:
 		{
 			if (timeGetTime() - timer >= tftp_timeout)
 			{
+				tftp_timeout = tftp_timeout * 2;
 				TFTP_INFO("WRQ发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
 				if (++retrytimes > max_retrytimes)
 				{
@@ -213,7 +220,10 @@ public:
 			if (f_recvfrom_status == future_status::ready)
 			{
 				if (recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+				{
+					tftp_timeout = default_timeout;
 					break;
+				}
 				else
 				{
 					f_recvfrom.wait();
@@ -259,6 +269,7 @@ public:
 			{
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
+					tftp_timeout = tftp_timeout * 2;
 					TFTP_INFO("DATA发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
@@ -274,7 +285,10 @@ public:
 				if (f_recvfrom_status == future_status::ready)
 				{
 					if (recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+					{
+						tftp_timeout = default_timeout;
 						break;
+					}
 					else
 					{
 						f_recvfrom.wait();
@@ -331,7 +345,7 @@ private:
 		}
 		else
 		{
-			cout << endl<<"收到意料之外的分组"<<endl;
+			cout <<"收到意料之外的分组"<<endl;
 			TFTP_INFO("收到意料之外的分组", TFTP_INFO::RECVED_UNEXPECTED_PACKET, __LINE__, __func__);
 			return tftp_err_not_expected_pkt;
 		}
@@ -350,5 +364,10 @@ private:
 
 		str = "[" + processBar + "] " + to_string(perc*100) +"%";
 		//str = to_string(perc);
+	}
+	//总吞吐量计算
+	void cal_rate(int transLenth,string& cost_time)
+	{
+
 	}
 };
