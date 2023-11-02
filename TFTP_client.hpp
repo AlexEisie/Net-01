@@ -10,7 +10,8 @@
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma warning(disable : 4996)
-
+//#define DEBUG 1
+#define f_detect_gap 30
 extern int slicelenth;
 extern long long default_timeout;
 extern int max_retrytimes;
@@ -112,11 +113,11 @@ public:
 						TFTP_INFO("ACK达到最大重传次数", TFTP_INFO::ACK_REACH_MAX_RETRYTIMES, __LINE__, __func__);
 					}
 					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-					f_sendto.wait();
+					//f_sendto.wait();
 					timer = timeGetTime();
 				}
 
-				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
+				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(f_detect_gap));
 				if (f_recvfrom_status == future_status::ready)
 				{
 					if (recvpkt.lenth != -1 && check_recvptk(msg_DATA, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
@@ -146,7 +147,7 @@ public:
 			sendpkt.lenth = 4;
 
 			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-			f_sendto.wait();
+			//f_sendto.wait();
 			cout << "成功！        " << flush;
 
 			pktnum++;
@@ -259,7 +260,7 @@ public:
 			//f_proced = async(launch::async, [transLenth, filelenth, &proced, this]() {cal_process(transLenth, filelenth, proced); });
 
 			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-			f_sendto.wait();
+			//f_sendto.wait();
 			cout << "\rpktnum=" << (uint16_t)pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据...."<<flush;
 
 			//尝试接收ACK
@@ -278,11 +279,11 @@ public:
 						TFTP_INFO("DATA达到最大重传次数", TFTP_INFO::DATA_REACH_MAX_RETRYTIMES, __LINE__, __func__);
 					}
 					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-					f_sendto.wait();
+					//f_sendto.wait();
 					timer = timeGetTime();
 				}
 
-				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
+				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(f_detect_gap));
 				if (f_recvfrom_status == future_status::ready)
 				{
 					if (recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
@@ -325,7 +326,7 @@ private:
 	//尝试进行recvfrom，线程1s后自动结束
 	void tryrecvfrom(int* pktlenth)
 	{
-		timeval tv = { 1, 0};
+		timeval tv = { 4, 0};
 		setsockopt(client, SOL_SOCKET,SO_RCVTIMEO, (char*)&tv, sizeof(timeval));	//设置socket行为，如果在tv超时时间后没有收到结果，则recvfrom退出阻塞状态返回10062
 		if ((*pktlenth = recvfrom(client, recvpkt.data, sizeof(recvpkt.data), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
 			TFTP_INFO("socket recvfrom函数返回-1", TFTP_INFO::RECVFROM_FAILED, __LINE__, __func__);
