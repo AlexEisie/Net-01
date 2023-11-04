@@ -6,7 +6,7 @@
 char server_ip[64] = "127.0.0.1";
 unsigned short server_port = 69;
 //客户端参数配置
-int slicelenth = 512;		//文件分片大小必须是512，不然不会接收
+long slicelenth = 512;		//文件分片大小必须是512，不然不会接收
 long long default_timeout = 500;
 int max_retrytimes=3;
 //客户端生成参数
@@ -47,6 +47,7 @@ int main()
 		{
 			menu.SubMenu_File_Config(local_file_name, remote_file_name,ts_mode);
 			//向服务器写文件Write
+			//启动写操作
 			ifstream local_file(local_file_name, ios::in | ios::binary);	//这里加入binary模式是因为如果默认使用文本格式会丢弃\n
 			try
 			{
@@ -54,8 +55,8 @@ int main()
 					cout << "无法打开本地文件" << std::endl;
 					TFTP_INFO("无法打开本地文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
-				TFTP_msg testwrite(client, &server_addr, msg_WRQ);
-				if (testwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
+				TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
+				if (TFTPwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
 					cout << "向服务器写成功！" << endl;
 				local_file.close();
 			}
@@ -75,6 +76,8 @@ int main()
 		{
 			menu.SubMenu_File_Config(local_file_name, remote_file_name, ts_mode);
 			//向服务器读文件Read
+
+			//检查本地文件
 			ifstream check_file(local_file_name, ios::in | ios::binary);
 			if (check_file.good())
 			{
@@ -94,6 +97,7 @@ int main()
 					break;
 				}
 			}
+			//启动读操作
 			ofstream local_file(local_file_name, ios::out | ios::binary);
 			try
 			{
@@ -101,8 +105,8 @@ int main()
 					TFTP_INFO("无法创建或打开文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
 
-				TFTP_msg testread(client, &server_addr, msg_RRQ);
-				if (testread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
+				TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
+				if (TFTPread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
 					cout << "向服务器读成功！" << endl;
 				local_file.close();
 			}

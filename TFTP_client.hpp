@@ -10,9 +10,8 @@
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma warning(disable : 4996)
-//#define DEBUG 1
 #define f_detect_gap 30
-extern int slicelenth;
+extern long slicelenth;
 extern long long default_timeout;
 extern int max_retrytimes;
 
@@ -21,11 +20,11 @@ long long tftp_timeout = default_timeout;  //发生超时*2,接收成功恢复
 using namespace std;
 enum msg_kind
 {
-	msg_RRQ = 1,
-	msg_WRQ = 2,
-	msg_DATA = 3,
-	msg_ACK = 4,
-	msg_ERROR = 5
+	msg_RRQ = (__int16)1,
+	msg_WRQ = (__int16)2,
+	msg_DATA = (__int16)3,
+	msg_ACK = (__int16)4,
+	msg_ERROR = (__int16)5
 };
 
 enum t_status
@@ -36,19 +35,26 @@ enum t_status
 	ok = 0
 };
 
-enum tftp_status
-{
-	tftp_err_max_retrytimes = -1,
-	tftp_err_not_expected_pkt = -1,
-	tftp_err_get_error_Opcode = -1,
-	tftp_pkt_ok = 0
-};
-
 class TFTP_msg
 {
 public:
-	struct pkt {
-		char data[1200];
+	struct pkt 
+	{
+		union //使用union将struct content和char结合，从而实现const char *读取content
+		{
+			struct
+			{
+				__int16 Opcode;
+				union
+				{
+					struct { char filename_tsmode[1024]; }RQ;
+					struct { __int16 pktnum; }ACK;
+					struct { __int16 pktnum; char data[1024]; }Data;
+					struct { __int16 ErrorCode; char detail[1024]; }Error;
+				}payload;
+			} str;
+			char ptr;
+		}content;
 		int lenth;
 	};
 	struct pkt sendpkt;
@@ -56,47 +62,44 @@ public:
 	SOCKET client;
 	struct sockaddr_in* server_addr;
 	int server_addr_length;
-	TFTP_msg(SOCKET c, struct sockaddr_in* s, msg_kind Opcode)
+	msg_kind Opcode;
+	TFTP_msg(SOCKET c, struct sockaddr_in* s, msg_kind opcode)
 	{
 		memset(&sendpkt, 0, sizeof(sendpkt));
 		memset(&recvpkt, 0, sizeof(recvpkt));
-		*(__int8*)(sendpkt.data + 1) = (__int8)Opcode;
+		Opcode = opcode;
 		client = c;
 		server_addr = s;
 		server_addr_length = sizeof(*server_addr);
+		std::ios::sync_with_stdio(false);		//解除输出线程绑定
 	}
 
+	//用于Client从服务器读文件
 	t_status TFTP_readfile(const char* file_name, const char* ts_mode, ofstream& file)
 	{
 		int filelength = 0;
 		__int16 pktnum = 1;
 		bool done = 0;
 		__int64 timer;
-		
+
 		int transLenth = 0;
 		clock_t transTime = clock();
 
 		int* spktlenth = &sendpkt.lenth;
 		int* rpktlenth = &recvpkt.lenth;
-		future<void> f_sendto;
 		future<void> f_recvfrom;
-		future_status f_sendto_status;
 		future_status f_recvfrom_status;
 
 		//RRQ报文发，ACK报文收
 
-		//构建RRQ报文
-		strcpy(sendpkt.data + 2, file_name);
-		strcpy(sendpkt.data + 2 + strlen(file_name) + 1, ts_mode);
-		sendpkt.lenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
-		
-		f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-		f_sendto.wait();
-		
+		//构建发送RRQ报文
+		Create_Pkt(msg_RRQ, file_name, ts_mode);
+
+		trysendto(spktlenth);
+
 		//从序号1开始收DATA
 		while (1)
 		{
-
 			//尝试接收DATA
 			timer = timeGetTime();	//启动定时器
 			f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
@@ -112,17 +115,18 @@ public:
 						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 						TFTP_INFO("ACK达到最大重传次数", TFTP_INFO::ACK_REACH_MAX_RETRYTIMES, __LINE__, __func__);
 					}
-					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-					//f_sendto.wait();
+					trysendto(spktlenth);
 					timer = timeGetTime();
 				}
 
+				//探测recvfrom线程状态
 				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(f_detect_gap));
 				if (f_recvfrom_status == future_status::ready)
 				{
-					if (recvpkt.lenth != -1 && check_recvptk(msg_DATA, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+					//检查收包
+					if (recvpkt.lenth != -1 && check_recvpkt(msg_DATA, pktnum) == ok)		//tryrecvfrom线程结束,收包正确
 					{
-						tftp_timeout =default_timeout;
+						tftp_timeout = default_timeout;
 						break;
 					}
 					else
@@ -136,38 +140,34 @@ public:
 			transLenth += recvpkt.lenth;
 			if (recvpkt.lenth - 4 < 512)
 				done = 1;
-			cout << "\rpktnum=" << (uint16_t)pktnum << "确认接收:" << recvpkt.lenth - 4 << "字节数据...."<<flush;
-			file.write(recvpkt.data+ 4, recvpkt.lenth - 4);
-			
+			//cout << "成功！\rpktnum=" << (uint16_t)pktnum << "确认接收:" << recvpkt.lenth - 4 << "字节数据...." << flush;
+			printf("成功！\t\rpktnum=%d确认接收:%d字节数据....", (uint16_t)pktnum, recvpkt.lenth - 4);
+
+			file.write(recvpkt.content.str.payload.Data.data, recvpkt.lenth - 4);
+
 			//构造发送ACK
-			memset(&sendpkt, 0, sizeof(sendpkt));
-			*((__int8*)sendpkt.data + 1) = (__int8)msg_ACK;
-			*(__int8*)(sendpkt.data + 2) = *((__int8*)&pktnum + 1);		//高低端转换
-			*(__int8*)(sendpkt.data + 3) = *(__int8*)&pktnum;
-			sendpkt.lenth = 4;
+			Create_Pkt(msg_ACK, pktnum);
 
-			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-			//f_sendto.wait();
-			cout << "成功！        " << flush;
-
+			trysendto(spktlenth);
+			//cout << "成功！        " << flush;
 			pktnum++;
 			if (done)
 				break;
 		}
+
 		string user_msg("已完成一个文件的获取,共耗时:");
-				user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
-				user_msg += "s获取了:" + to_string(transLenth);
-				user_msg += "bytes";
-				user_msg += "平均吞吐量为:";
-				user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
-		cout << endl<<user_msg << endl;
+		user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
+		user_msg += "s获取了:" + to_string(transLenth);
+		user_msg += "bytes";
+		user_msg += "平均吞吐量为:";
+		user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
+		cout << endl << user_msg << endl;
 		TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
 	}
-
 	t_status TFTP_writefile(const char* file_name, const char* ts_mode, ifstream& file)
 	{
-		int filelength = 0;
+		long filelenth = 0;
 		__int16 pktnum = 0;
 		bool done = 0;
 		__int64 timer;
@@ -177,33 +177,25 @@ public:
 
 		int* spktlenth = &sendpkt.lenth;
 		int* rpktlenth = &recvpkt.lenth;
-		future<void> f_sendto;
 		future<void> f_recvfrom;
-		future_status f_sendto_status;
 		future_status f_recvfrom_status;
-
-		//string proced;
-		//future<void> f_proced;
 
 		//计算文件总大小
 		file.seekg(0, std::ios::end);
-		int filelenth = file.tellg();
+		filelenth = file.tellg();
 		file.seekg(0, std::ios::beg);
 
 		//WRQ报文发，ACK报文收
 
 		//构建WRQ报文
-		strcpy(sendpkt.data + 2, file_name);
-		strcpy(sendpkt.data + 2 + strlen(file_name) + 1, ts_mode);
-		sendpkt.lenth = 2 + strlen(file_name) + strlen(ts_mode) + 2;
-		
-		f_sendto = async(launch::async, [spktlenth,this]() {trysendto(spktlenth);});
-		f_sendto.wait();
-		
-		timer = timeGetTime();	//启动定时器
-		f_recvfrom = async(launch::async, [rpktlenth,this]() {tryrecvfrom(rpktlenth);});
+		Create_Pkt(msg_WRQ, file_name, ts_mode);
 
-		for(int retrytimes=0;retrytimes<=max_retrytimes;)
+		trysendto(spktlenth);
+
+		timer = timeGetTime();	//启动定时器
+		f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
+
+		for (int retrytimes = 0; retrytimes <= max_retrytimes;)
 		{
 			if (timeGetTime() - timer >= tftp_timeout)
 			{
@@ -211,17 +203,18 @@ public:
 				TFTP_INFO("WRQ发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
 				if (++retrytimes > max_retrytimes)
 				{
-					cout <<"LINE:" << __LINE__ << " 达到最大重传次数" << endl;
+					cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 					TFTP_INFO("WRQ达到最大重传次数", TFTP_INFO::REQUEST_REACH_MAX_RETRYTIMES, __LINE__, __func__);
 				}
-				f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-				f_sendto.wait();
+				trysendto(spktlenth);
 				timer = timeGetTime();
 			}
+
+			//探测recvfrom线程状态
 			f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(0));
 			if (f_recvfrom_status == future_status::ready)
 			{
-				if (recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+				if (recvpkt.lenth != -1 && check_recvpkt(msg_ACK, pktnum) == ok)		//tryrecvfrom线程结束,收包正确
 				{
 					tftp_timeout = default_timeout;
 					break;
@@ -232,7 +225,8 @@ public:
 					f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });		//tryrecvfrom线程结束,收包错误，重启接收
 				}
 			}
-;		}
+			;
+		}
 		f_recvfrom.wait();
 		pktnum++;
 
@@ -240,29 +234,11 @@ public:
 		while (1)
 		{
 			//构造发送DATA包
-			memset(&sendpkt, 0, sizeof(sendpkt));
-			*(__int8*)(sendpkt.data + 1) = (__int8)msg_DATA;
-			*(__int8*)(sendpkt.data + 2) = *((__int8*)&pktnum + 1);		//高低端转换
-			*(__int8*)(sendpkt.data + 3) = *(__int8*)&pktnum;
-			file.read(sendpkt.data + 4, slicelenth);
-			if (filelenth >= slicelenth)		//更新filelenth,计算pktlenth
-			{
-				filelenth -= slicelenth;
-				sendpkt.lenth = 4 + slicelenth;
-			}
-			else
-			{
-				done = 1;
-				sendpkt.lenth = 4 + filelenth;
-			}
+			done=Create_Pkt(msg_DATA, pktnum, file, &filelenth);
 			transLenth += sendpkt.lenth;
 
-			//f_proced = async(launch::async, [transLenth, filelenth, &proced, this]() {cal_process(transLenth, filelenth, proced); });
-
-			f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-			//f_sendto.wait();
-			cout << "\rpktnum=" << (uint16_t)pktnum<< "正在发送:" << sendpkt.lenth - 4 << "字节数据...."<<flush;
-
+			trysendto(spktlenth);
+			printf("成功! %s\t\rpktnum=%d正在发送:%d字节数据....", cal_process(transLenth, filelenth).c_str(), (uint16_t)pktnum, sendpkt.lenth - 4);
 			//尝试接收ACK
 			timer = timeGetTime();	//启动定时器
 			f_recvfrom = async(launch::async, [rpktlenth, this]() {tryrecvfrom(rpktlenth); });
@@ -278,15 +254,15 @@ public:
 						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
 						TFTP_INFO("DATA达到最大重传次数", TFTP_INFO::DATA_REACH_MAX_RETRYTIMES, __LINE__, __func__);
 					}
-					f_sendto = async(launch::async, [spktlenth, this]() {trysendto(spktlenth); });
-					//f_sendto.wait();
+					trysendto(spktlenth);
 					timer = timeGetTime();
 				}
 
+				//探测recvfrom线程状态
 				f_recvfrom_status = f_recvfrom.wait_for(chrono::microseconds(f_detect_gap));
 				if (f_recvfrom_status == future_status::ready)
 				{
-					if (recvpkt.lenth != -1 && check_recvptk(msg_ACK, pktnum) == tftp_pkt_ok)		//tryrecvfrom线程结束,收包正确
+					if (recvpkt.lenth != -1 && check_recvpkt(msg_ACK, pktnum) == ok)		//tryrecvfrom线程结束,收包正确
 					{
 						tftp_timeout = default_timeout;
 						break;
@@ -299,27 +275,30 @@ public:
 				}
 			}
 			f_recvfrom.wait();
-			cout << "成功！             " << cal_process(transLenth,filelenth) <<flush;
+			//printf("成功！             ");
 			pktnum++;
-
 			if (done)
 				break;
 		}
 		string user_msg("已完成一个文件的发送,共耗时:");
-				user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
-				user_msg += "s发送了:" + to_string(transLenth);
-				user_msg += "bytes";
-				user_msg += "平均吞吐量为:";
-				user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
-		cout << endl <<user_msg<<endl;
-		TFTP_INFO(user_msg.c_str(),(TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
+		user_msg += to_string((double)(clock() - transTime) / CLOCKS_PER_SEC);
+		user_msg += "s发送了:" + to_string(transLenth);
+		user_msg += "bytes";
+		user_msg += "平均吞吐量为:";
+		user_msg += cal_rate(transLenth, (double)(clock() - transTime) / CLOCKS_PER_SEC);
+		cout << endl << user_msg << endl;
+		TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 		return ok;
 	}
 private:
+	__int16 reverse_HL(__int16 num)
+	{
+		return (num >> 8 & 0xff) + (num << 8 & 0xff00);
+	}
 	//尝试进行sendto
 	void trysendto(int *pktlenth)
 	{
-		if (sendto(client, sendpkt.data, *pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
+		if (sendto(client, &sendpkt.content.ptr, *pktlenth, 0, (struct sockaddr*)server_addr, sizeof(*server_addr)) < 0)
 			TFTP_INFO("socket sendto函数返回-1", TFTP_INFO::SENDTO_FAILED, __LINE__, __func__);
 	}
 	
@@ -328,34 +307,70 @@ private:
 	{
 		timeval tv = { 4, 0};
 		setsockopt(client, SOL_SOCKET,SO_RCVTIMEO, (char*)&tv, sizeof(timeval));	//设置socket行为，如果在tv超时时间后没有收到结果，则recvfrom退出阻塞状态返回10062
-		if ((*pktlenth = recvfrom(client, recvpkt.data, sizeof(recvpkt.data), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
+		if ((*pktlenth = recvfrom(client, &recvpkt.content.ptr, sizeof(recvpkt.content), 0, (struct sockaddr*)server_addr, &server_addr_length)) == -1)
 			TFTP_INFO("socket recvfrom函数返回-1", TFTP_INFO::RECVFROM_FAILED, __LINE__, __func__);
 	}
 
-	//检查分组Opcode及pktnum
-	tftp_status check_recvptk(msg_kind Opcode, __int16 pktnum)
+	//构建发送报文_重载1_RQ
+	void Create_Pkt(__int16 _Opcode,const  char* _file_name,const char* _ts_mode)
 	{
-		if (*(__int8*)(recvpkt.data + 1) == (__int8)Opcode
-			&& *(__int8*)(recvpkt.data + 2) == *((__int8*)&pktnum + 1)
-			&&*(__int8*)(recvpkt.data + 3) == *(__int8*)&pktnum)
-			return tftp_pkt_ok;
-		else if (*(__int8*)(recvpkt.data + 1) == (__int8)msg_ERROR)
+		memset(&sendpkt, 0, sizeof(sendpkt));
+		sendpkt.content.str.Opcode = reverse_HL(_Opcode);
+		strcpy(sendpkt.content.str.payload.RQ.filename_tsmode, _file_name);
+		strcpy(sendpkt.content.str.payload.RQ.filename_tsmode + strlen(_file_name) + 1, _ts_mode);
+		sendpkt.lenth = 2 + strlen(_file_name) + strlen(_ts_mode) + 2;
+	}
+	//构建发送报文_重载2_ACK
+	void Create_Pkt(__int16 _Opcode, __int16 _pktnum)
+	{
+		memset(&sendpkt, 0, sizeof(sendpkt));
+		sendpkt.content.str.Opcode = reverse_HL(_Opcode);
+		sendpkt.content.str.payload.ACK.pktnum = reverse_HL(_pktnum);
+		sendpkt.lenth = 4;
+
+	}
+	//构建发送报文_重载3_DATA 文件读取进入最后一个段返回1
+	bool Create_Pkt(__int16 _Opcode, __int16 _pktnum,ifstream& _file,long * filelenth)
+	{
+		memset(&sendpkt, 0, sizeof(sendpkt));
+		sendpkt.content.str.Opcode = reverse_HL(_Opcode);
+		sendpkt.content.str.payload.Data.pktnum = reverse_HL(_pktnum);
+		_file.read(sendpkt.content.str.payload.Data.data, slicelenth);
+		if (*filelenth >= slicelenth)		//更新filelenth,计算pktlenth
+		{
+			*filelenth -= slicelenth;
+			sendpkt.lenth = 4 + slicelenth;
+			return 0;
+		}
+		else
+		{
+			sendpkt.lenth = 4 + *filelenth;
+			return 1;
+		}
+	}
+	//解析接收报文
+	t_status check_recvpkt(msg_kind Opcode, __int16 pktnum)
+	{
+		if (recvpkt.content.str.Opcode == reverse_HL(Opcode)&&
+			recvpkt.content.str.payload.ACK.pktnum == reverse_HL(pktnum))	//此处ACK与DATA的pktnum等价
+			return ok;
+		else if (recvpkt.content.str.Opcode == reverse_HL(msg_ERROR))
 		{
 			string user_msg("收到Opcode=ERROR:");
-			user_msg += recvpkt.data + 4;
+			user_msg += recvpkt.content.str.payload.Error.detail;
 			cout << user_msg << endl;
 			TFTP_INFO(user_msg.c_str(), TFTP_INFO::RECVED_ERROR_PACKET, __LINE__, __func__);
-			return tftp_err_get_error_Opcode;
+			return wrongstep;
 		}
 		else
 		{
 			cout <<"收到意料之外的分组"<<endl;
 			TFTP_INFO("收到意料之外的分组", TFTP_INFO::RECVED_UNEXPECTED_PACKET, __LINE__, __func__);
-			return tftp_err_not_expected_pkt;
+			return wrongstep;
 		}
 	}
 	//进度计算与进度条生成
-	string cal_process(int transed,int left)
+	string cal_process(int transed,long left)
 	{
 		float perc = (float)transed / (transed + left);
 		int filled_num = perc * 20+1;

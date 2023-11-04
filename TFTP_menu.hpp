@@ -19,7 +19,7 @@ public:
 	void MainMenu()
 	{
 		system("cls");
-		cout << "Welcome to Noob TFTP Client v114.514 by U2022***86" << endl;
+		cout << "Welcome to Nano TFTP Client v114.514 by U2022***86" << endl;
 		cout << "0.获取帮助" << endl;
 		cout << "1.修改服务器监听配置(默认值127.0.0.1:69)" << endl;
 		cout << "2.向服务器写文件(WRITE / PUT)" << endl;
@@ -46,7 +46,7 @@ public:
 		cout<<"输入TFTP传输模式（netascii/octet)(当前值" << ts_mode << "):";
 		cin >> ts_mode;
 	}
-	void SubMenu_Client_Config(int* slicelenth, long long* default_timeout, int* max_retrytimes)
+	void SubMenu_Client_Config(long* slicelenth, long long* default_timeout, int* max_retrytimes)
 	{
 		system("cls");
 		cout << "请输入发送文件分片大小(Bytes)(当前值" << *slicelenth << "):";
