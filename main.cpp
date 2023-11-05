@@ -6,7 +6,7 @@
 char server_ip[64] = "127.0.0.1";
 unsigned short server_port = 69;
 //客户端参数配置
-int slicelenth = 512;		//文件分片大小必须是512，不然不会接收
+long slicelenth = 512;		//文件分片大小必须是512，不然不会接收
 long long default_timeout = 500;
 int max_retrytimes=3;
 //客户端生成参数
@@ -21,6 +21,7 @@ char ts_mode[32]= "octet";
 const char log_file_name[] = "tftpclient.log";
 ofstream TFTP_Log::log_file(log_file_name, ios::out | ios::app);
 
+
 void Net_Init();
 void Net_Clear();
 
@@ -31,22 +32,23 @@ int main()
 	//程序启动
 	TFTP_INFO("程序启动",(TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__,__func__);
 
+	//选择主循环
 	while (true)
 	{
-		Net_Init();
-		TFTP_Menu menu;
+		Net_Init();		//初始化网络
+		TFTP_Menu menu;	//初始化菜单
 		menu.MainMenu();
 		switch (menu.choose())
 		{
-		case TFTP_Menu::MenuChoice::SERVER_CONFIG:
+		case TFTP_Menu::MenuChoice::SERVER_CONFIG:	//服务器配置
 			menu.SubMenu_Server_Config(server_ip,&server_port);
 			Net_Clear();
 			system("pause");
 			break;
-		case TFTP_Menu::MenuChoice::WRITEFILE:
+		case TFTP_Menu::MenuChoice::WRITEFILE:	//向服务器写文件
 		{
 			menu.SubMenu_File_Config(local_file_name, remote_file_name,ts_mode);
-			//向服务器写文件Write
+			//启动写操作
 			ifstream local_file(local_file_name, ios::in | ios::binary);	//这里加入binary模式是因为如果默认使用文本格式会丢弃\n
 			try
 			{
@@ -54,19 +56,23 @@ int main()
 					cout << "无法打开本地文件" << std::endl;
 					TFTP_INFO("无法打开本地文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
-				TFTP_msg testwrite(client, &server_addr, msg_WRQ);
-				if (testwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
+				TFTP_msg* pTFTPwrite=new TFTP_msg(client, &server_addr, msg_WRQ);
+				TFTP_msg& TFTPwrite = *pTFTPwrite;
+				//TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
+				if (TFTPwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
 					cout << "向服务器写成功！" << endl;
 				local_file.close();
 			}
 			catch (TFTP_INFO& TFTP_error)
 			{
+				//如果出现异常，关闭文件，清理网络，退出
 				TFTP_error.Create_Log();
 				local_file.close();
 				Net_Clear();
 				system("pause");
 				break;
 			}
+			//清理网络
 			Net_Clear();
 			system("pause");
 			break;
@@ -75,6 +81,8 @@ int main()
 		{
 			menu.SubMenu_File_Config(local_file_name, remote_file_name, ts_mode);
 			//向服务器读文件Read
+
+			//检查本地文件
 			ifstream check_file(local_file_name, ios::in | ios::binary);
 			if (check_file.good())
 			{
@@ -94,6 +102,7 @@ int main()
 					break;
 				}
 			}
+			//启动读操作
 			ofstream local_file(local_file_name, ios::out | ios::binary);
 			try
 			{
@@ -101,13 +110,16 @@ int main()
 					TFTP_INFO("无法创建或打开文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
 
-				TFTP_msg testread(client, &server_addr, msg_RRQ);
-				if (testread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
+				TFTP_msg* pTFTPread = new TFTP_msg(client, &server_addr, msg_RRQ);
+				TFTP_msg& TFTPread = *pTFTPread;
+				//TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
+				if (TFTPread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
 					cout << "向服务器读成功！" << endl;
 				local_file.close();
 			}
 			catch (TFTP_INFO& TFTP_error)
 			{
+				//如果出现异常，关闭文件，清理网络，退出
 				TFTP_error.Create_Log();
 				local_file.close();
 				Net_Clear();
@@ -118,9 +130,10 @@ int main()
 			system("pause");
 			break;
 		}
-		case TFTP_Menu::MenuChoice::GET_LOG_LOCATION:
+		case TFTP_Menu::MenuChoice::GET_LOG_LOCATION:	//获取日志文件位置
 		{
 			system("cls");
+			//获取当前路径
 			const int MAXPATH = 250;
 			char local_path[MAXPATH];
 			getcwd(local_path, MAXPATH);
@@ -129,13 +142,13 @@ int main()
 			system("pause");
 			break;
 		}
-		case TFTP_Menu::MenuChoice::EXITPRO:
+		case TFTP_Menu::MenuChoice::EXITPRO:	//退出程序
 		{
 			Net_Clear();
 			TFTP_INFO("程序正常结束", (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
 			return 0;
 		}
-		case TFTP_Menu::MenuChoice::CLIENT_CONFIG:
+		case TFTP_Menu::MenuChoice::CLIENT_CONFIG:		//客户端配置
 		{
 			menu.SubMenu_Client_Config(&slicelenth, &default_timeout, &max_retrytimes);
 			Net_Clear();

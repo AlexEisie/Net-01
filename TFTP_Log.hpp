@@ -4,6 +4,7 @@
 #pragma warning(disable : 4996)
 using namespace std;
 
+//TFTP_Log日志生成类
 class TFTP_Log 
 {
 public:
@@ -12,6 +13,7 @@ public:
 	TFTP_Log();
 	TFTP_Log(const char* message, Log_level level, int LINE, const char* FUNC, create_log c) :TFTP_Log(message, level, LINE, FUNC) { test_log_file(); };
 	TFTP_Log(create_log c) { test_log_file(); }
+	//TFTP_Log构造函数（实际生成事件重载）
 	TFTP_Log(const char* message,Log_level level,int LINE,const char* FUNC)
 	{
 		time(&timep);
@@ -27,6 +29,7 @@ public:
 		}
 		log_file <<" FUNC:"<<FUNC << " LINE:" << LINE << " " << message << endl;
 	}
+	//如果日志文件无法打开，程序退出
 	bool test_log_file()
 	{
 		if (!TFTP_Log::log_file.is_open()) {
@@ -35,7 +38,7 @@ public:
 		}
 	}
 private:
-	static ofstream log_file;
+	static ofstream log_file;	//类静态成员，日志文件
 	time_t timep;
 };
 

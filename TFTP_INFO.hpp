@@ -4,12 +4,14 @@
 #pragma warning(disable : 4996)
 using namespace std;
 
+//TFTP_INFO通告类
 class TFTP_INFO
 {
 	#define COMMON_INFO  0
 	#define ADORABLE_ERROR 1
 	#define CRITICAL_ERROR -1
 public:
+	//通知类型枚举定义
 	enum TFTP_INFO_TYPE
 	{
 		//COMMON INFO=0
@@ -32,12 +34,15 @@ public:
 	string message;
 	int LINE;
 	string FUNC;
+
+	//TFTP_INFO构造函数
 	TFTP_INFO(const char* _message, TFTP_INFO_TYPE _info_type, int _LINE, const char* _FUNC)
 	{
 		message = _message;
 		info_type = _info_type;
 		LINE = _LINE;
 		FUNC = _FUNC;
+		//不同等级通告
 		switch (info_type)
 		{
 		case COMMON_INFO:
