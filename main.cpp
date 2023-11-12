@@ -56,9 +56,9 @@ int main()
 					cout << "无法打开本地文件" << std::endl;
 					TFTP_INFO("无法打开本地文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
-				TFTP_msg* pTFTPwrite=new TFTP_msg(client, &server_addr, msg_WRQ);
-				TFTP_msg& TFTPwrite = *pTFTPwrite;
-				//TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
+				/*TFTP_msg* pTFTPwrite=new TFTP_msg(client, &server_addr, msg_WRQ);
+				TFTP_msg& TFTPwrite = *pTFTPwrite;*/
+				TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
 				if (TFTPwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
 					cout << "向服务器写成功！" << endl;
 				local_file.close();
@@ -110,9 +110,9 @@ int main()
 					TFTP_INFO("无法创建或打开文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
 
-				TFTP_msg* pTFTPread = new TFTP_msg(client, &server_addr, msg_RRQ);
-				TFTP_msg& TFTPread = *pTFTPread;
-				//TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
+				/*TFTP_msg* pTFTPread = new TFTP_msg(client, &server_addr, msg_RRQ);
+				TFTP_msg& TFTPread = *pTFTPread;*/
+				TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
 				if (TFTPread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
 					cout << "向服务器读成功！" << endl;
 				local_file.close();

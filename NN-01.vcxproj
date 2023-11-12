@@ -135,6 +135,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TFTP_client.hpp" />
+    <ClInclude Include="TFTP_Print.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="todolist.txt" />

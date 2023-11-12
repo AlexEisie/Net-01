@@ -1,3 +1,5 @@
+#ifndef TFTP_INFO_HPP
+#define TFTP_INFO_HPP
 #include <iostream>
 #include <string>
 #include "TFTP_Log.hpp"
@@ -9,7 +11,8 @@ class TFTP_INFO
 {
 	#define COMMON_INFO  0
 	#define ADORABLE_ERROR 1
-	#define CRITICAL_ERROR -1
+	#define CRITICAL_ERROR (-1)
+
 public:
 	//通知类型枚举定义
 	enum TFTP_INFO_TYPE
@@ -52,13 +55,16 @@ public:
 			TFTP_Log(message.c_str(), TFTP_Log::LOG_WARN, _LINE, _FUNC);
 			break;
 		case CRITICAL_ERROR:
-			throw *this;
-			break;
+			throw TFTP_INFO(*this); 
+			break; 
 		}
 	}
+
+
 	void Create_Log()
 	{
 		TFTP_Log(message.c_str(), TFTP_Log::LOG_ERROR, LINE, FUNC.c_str());
 		return;
 	}
 };
+#endif // TFTP_INFO_HPP
