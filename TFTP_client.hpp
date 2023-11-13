@@ -38,7 +38,8 @@ enum t_status
 	sendwrong = -1,
 	recvwrong = -1,
 	wrongstep = -1,
-	ok = 0
+	ok = 0,
+	dupstep = 1
 };
 
 //TFTP报文类
@@ -221,14 +222,13 @@ inline t_status TFTP_msg::TFTP_readfile(const char* file_name, const char* ts_mo
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
 					//超时重传
-					tftp_timeout = tftp_timeout * 2;
-					TFTP_INFO("ACK包发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
+					string user_msg = "DATA超时 pktnum=" + to_string(pktnum);
+					TFTP_INFO(user_msg.c_str(), TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
-						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
-						TFTP_INFO("ACK达到最大重传次数", TFTP_INFO::ACK_REACH_MAX_RETRYTIMES, __LINE__, __func__);
+						cout << "LINE:" << __LINE__ << " 达到最大超时次数" << endl;
+						TFTP_INFO("DATA超时达到最大次数", TFTP_INFO::DATA_REACH_MAX_TIMEOUTTIMES, __LINE__, __func__);
 					}
-					trysendto();
 					timer = timeGetTime();
 				}
 
@@ -237,16 +237,19 @@ inline t_status TFTP_msg::TFTP_readfile(const char* file_name, const char* ts_mo
 				if (f_recvfrom_status == future_status::ready)
 				{
 					//检查接收包
-					if (recvpkt.lenth != -1 && check_recvpkt(msg_DATA, pktnum) == ok) //tryrecvfrom线程结束,收包正确
-					{
-						tftp_timeout = default_timeout;
-						break;
-					}
-					f_recvfrom.wait();
+					if (recvpkt.lenth != -1)
+						if (check_recvpkt(msg_DATA, pktnum) == ok)
+							break;
+						else if (check_recvpkt(msg_DATA, pktnum) == dupstep)
+						{
+							timer = timeGetTime();
+							trysendto();
+						}
+					//f_recvfrom.wait();	//无需等待，可能会导致线程不安全
 					f_recvfrom = async(launch::async, [&]() { tryrecvfrom(); }); //tryrecvfrom线程结束,收包错误，重启接收
 				}
 			}
-			f_recvfrom.wait();
+			//f_recvfrom.wait();
 			transLenth += recvpkt.lenth;
 			if (recvpkt.lenth - 4 < 512)
 				done = true;
@@ -255,7 +258,6 @@ inline t_status TFTP_msg::TFTP_readfile(const char* file_name, const char* ts_mo
 			print_buf = "成功!\t\t\t\t\rpktnum=" + to_string(static_cast<uint16_t>(pktnum)) + "确认接收:" + to_string(
 				recvpkt.lenth - 4) + "字节数据....";
 			print_thread.set_msg(print_buf);
-			//printf("成功！\t\rpktnum=%d确认接收:%d字节数据....", (uint16_t)pktnum, recvpkt.lenth - 4);
 
 			file.write(recvpkt.content.payload.Data.data, recvpkt.lenth - 4);
 
@@ -323,7 +325,6 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 		{
 			if (timeGetTime() - timer >= tftp_timeout)
 			{
-				tftp_timeout = tftp_timeout * 2;
 				TFTP_INFO("WRQ发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
 				if (++retrytimes > max_retrytimes)
 				{
@@ -339,10 +340,7 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 			if (f_recvfrom_status == future_status::ready)
 			{
 				if (recvpkt.lenth != -1 && check_recvpkt(msg_ACK, pktnum) == ok) //tryrecvfrom线程结束,收包正确
-				{
-					tftp_timeout = default_timeout;
 					break;
-				}
 				f_recvfrom.wait();
 				f_recvfrom = async(launch::async, [&]() { tryrecvfrom(); }); //tryrecvfrom线程结束,收包错误，重启接收
 			}
@@ -363,7 +361,6 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 			print_buf = "成功!" + cal_process(transLenth, filelenth) + "\t\t\t\t\rpktnum=" +
 				to_string(static_cast<uint16_t>(pktnum)) + "正在发送:" + to_string(sendpkt.lenth - 4) + "字节数据....";
 			print_thread.set_msg(print_buf);
-			//printf("成功! %s\t\rpktnum=%d正在发送:%d字节数据....", cal_process(transLenth, filelenth).c_str(), (uint16_t)pktnum, sendpkt.lenth - 4);
 
 			//尝试接收ACK
 			timer = timeGetTime(); //启动定时器
@@ -374,8 +371,8 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
 					//超时重传
-					tftp_timeout = tftp_timeout * 2;
-					TFTP_INFO("DATA发生重传，如果重传成功请注意超时时间的设置", TFTP_INFO::TIMEOUT, __LINE__, __func__);
+					string user_msg = "DATA重传 pktnum=" + to_string(pktnum);
+					TFTP_INFO(user_msg.c_str(), TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
 						cout << "LINE:" << __LINE__ << " 达到最大重传次数" << endl;
@@ -392,10 +389,9 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 					//检查接收包
 					if (recvpkt.lenth != -1 && check_recvpkt(msg_ACK, pktnum) == ok) //tryrecvfrom线程结束,收包正确
 					{
-						tftp_timeout = default_timeout;
 						break;
 					}
-					f_recvfrom.wait();
+					//f_recvfrom.wait();	//无需等待，可能会导致线程不安全
 					f_recvfrom = async(launch::async, [&]() { tryrecvfrom(); }); //tryrecvfrom线程结束,收包错误，重启接收
 				}
 			}
@@ -456,9 +452,17 @@ inline void TFTP_msg::Create_Pkt(short _Opcode, const char* _file_name, const ch
 //TFTP_msg接收检查函数实现
 inline t_status TFTP_msg::check_recvpkt(msg_kind Opcode, short pktnum)
 {
-	if (recvpkt.content.Opcode == reverse_HL(Opcode) &&
-		recvpkt.content.payload.ACK.pktnum == reverse_HL(pktnum)) //此处ACK与DATA的pktnum等价
-		return ok;
+	if (recvpkt.content.Opcode == reverse_HL(Opcode))
+		if (recvpkt.content.payload.ACK.pktnum == reverse_HL(pktnum))//此处ACK与DATA的pktnum等价
+			return ok;
+		else if (recvpkt.content.payload.ACK.pktnum < reverse_HL(pktnum))
+			return dupstep;
+		else
+		{
+			cout << "收到意料之外的分组!";
+			TFTP_INFO("收到意料之外的分组", TFTP_INFO::RECVED_UNEXPECTED_PACKET, __LINE__, __func__);
+			return wrongstep;
+		}
 	if (recvpkt.content.Opcode == reverse_HL(msg_ERROR))
 	{
 		string user_msg("收到Opcode=ERROR:");
@@ -467,8 +471,5 @@ inline t_status TFTP_msg::check_recvpkt(msg_kind Opcode, short pktnum)
 		TFTP_INFO(user_msg.c_str(), TFTP_INFO::RECVED_ERROR_PACKET, __LINE__, __func__);
 		return wrongstep;
 	}
-	cout << "收到意料之外的分组!";
-	TFTP_INFO("收到意料之外的分组", TFTP_INFO::RECVED_UNEXPECTED_PACKET, __LINE__, __func__);
-	return wrongstep;
 }
 #endif // TFTP_CLIENT_HPP

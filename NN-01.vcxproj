@@ -134,11 +134,21 @@
     <ClCompile Include="TFTP_menu.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="resource1.h" />
+    <ClInclude Include="resource2.h" />
+    <ClInclude Include="resource3.h" />
     <ClInclude Include="TFTP_client.hpp" />
     <ClInclude Include="TFTP_Print.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="todolist.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="NN-011.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="TFTPlogo.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

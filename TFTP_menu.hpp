@@ -83,7 +83,7 @@ public:
 		cin >> *slicelenth;
 		cout << "请输入基础超时时长(ms)(建议值:500ms,当前值" << *default_timeout << "):";
 		cin >> *default_timeout;
-		cout << "请输入最大重传次数(建议值:3,当前值" << *max_retrytimes << "):";
+		cout << "请输入最大重传次数(建议值:10,当前值" << *max_retrytimes << "):";
 		cin >> *max_retrytimes;
 	}
 

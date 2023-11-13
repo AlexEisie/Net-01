@@ -8,7 +8,7 @@ unsigned short server_port = 69;
 //客户端参数配置
 long slicelenth = 512;		//文件分片大小必须是512，不然不会接收
 long long default_timeout = 500;
-int max_retrytimes=3;
+int max_retrytimes=10;
 //客户端生成参数
 WSADATA wsa_data;
 SOCKET client;
@@ -60,7 +60,11 @@ int main()
 				TFTP_msg& TFTPwrite = *pTFTPwrite;*/
 				TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
 				if (TFTPwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
-					cout << "向服务器写成功！" << endl;
+				{
+					string user_msg = local_file_name + string("->") + remote_file_name + string(" 向服务器写成功！");
+					TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
+					cout << user_msg << endl;
+				}
 				local_file.close();
 			}
 			catch (TFTP_INFO& TFTP_error)
@@ -114,7 +118,11 @@ int main()
 				TFTP_msg& TFTPread = *pTFTPread;*/
 				TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
 				if (TFTPread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
-					cout << "向服务器读成功！" << endl;
+				{
+					string user_msg =  remote_file_name + string("->") + local_file_name + string(" 从服务器读成功！");
+					TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);
+					cout<<user_msg << endl;
+				}
 				local_file.close();
 			}
 			catch (TFTP_INFO& TFTP_error)
