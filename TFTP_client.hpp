@@ -222,7 +222,9 @@ inline t_status TFTP_msg::TFTP_readfile(const char* file_name, const char* ts_mo
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
 					//超时重传
-					string user_msg = "DATA超时 pktnum=" + to_string(pktnum);
+					if (transLenth == 0)		//仅重传RRQ
+						trysendto();
+					string user_msg = "DATA超时 pktnum=" + to_string(static_cast<uint16_t>(pktnum));
 					TFTP_INFO(user_msg.c_str(), TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
@@ -371,7 +373,7 @@ inline t_status TFTP_msg::TFTP_writefile(const char* file_name, const char* ts_m
 				if (timeGetTime() - timer >= tftp_timeout)
 				{
 					//超时重传
-					string user_msg = "DATA重传 pktnum=" + to_string(pktnum);
+					string user_msg = "DATA重传 pktnum=" + to_string(static_cast<uint16_t>(pktnum));
 					TFTP_INFO(user_msg.c_str(), TFTP_INFO::TIMEOUT, __LINE__, __func__);
 					if (++retrytimes > max_retrytimes)
 					{
