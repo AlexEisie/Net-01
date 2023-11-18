@@ -56,9 +56,21 @@ int main()
 					cout << "无法打开本地文件" << std::endl;
 					TFTP_INFO("无法打开本地文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
 				}
+				
 				/*TFTP_msg* pTFTPwrite=new TFTP_msg(client, &server_addr, msg_WRQ);
 				TFTP_msg& TFTPwrite = *pTFTPwrite;*/
 				TFTP_msg TFTPwrite(client, &server_addr, msg_WRQ);
+				if (!strcmp(ts_mode, "netascii"))	//如果是netascii模式，需要转换
+				{
+					string newfile =TFTPwrite.do_netascii(local_file);
+					local_file.close();
+					local_file.open(newfile, ios::in | ios::binary);
+					if (!local_file.is_open()) {
+						cout << "无法打开本地临时文件" << std::endl;
+						TFTP_INFO("无法打开本地临时文件", TFTP_INFO::FILE_OPEN_FAILED, __LINE__, __func__);
+					}
+				}
+
 				if (TFTPwrite.TFTP_writefile(remote_file_name, ts_mode, local_file) == ok)
 				{
 					string user_msg = local_file_name + string("->") + remote_file_name + string(" 向服务器写成功！");
@@ -117,7 +129,7 @@ int main()
 				/*TFTP_msg* pTFTPread = new TFTP_msg(client, &server_addr, msg_RRQ);
 				TFTP_msg& TFTPread = *pTFTPread;*/
 				TFTP_msg TFTPread(client, &server_addr, msg_RRQ);
-				if (TFTPread.TFTP_readfile(remote_file_name, "octet", local_file) == ok)
+				if (TFTPread.TFTP_readfile(remote_file_name, ts_mode, local_file) == ok)
 				{
 					string user_msg =  remote_file_name + string("->") + local_file_name + string(" 从服务器读成功！");
 					TFTP_INFO(user_msg.c_str(), (TFTP_INFO::TFTP_INFO_TYPE)0, __LINE__, __func__);

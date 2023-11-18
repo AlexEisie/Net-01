@@ -103,8 +103,64 @@ public:
 
 	//用于Client从服务器读文件
 	t_status TFTP_readfile(const char* file_name, const char* ts_mode, ofstream& file);
-
+	//用于Client向服务器写文件
 	t_status TFTP_writefile(const char* file_name, const char* ts_mode, ifstream& file);
+
+	//文件netascii化
+	string do_netascii(ifstream& originfile)
+	{
+		string newfilename("netascii_");
+		ofstream newfile;
+		char proc_buf[1024];
+		int proc_lenth = 0;
+		long file_lenth = 0;
+
+		originfile.seekg(0, std::ios::end);
+		file_lenth = originfile.tellg();
+		originfile.seekg(0, std::ios::beg);
+		//清除原临时文件
+		ifstream check_file(newfilename, ios::in | ios::binary);
+		if (check_file.good())
+		{
+			check_file.close();
+			remove(newfilename.c_str());
+		}
+
+		newfile.open(newfilename, ios::out | ios::binary);
+		while (file_lenth >0)
+		{
+			memset(proc_buf, 0, sizeof(proc_buf));
+			originfile.read(proc_buf, 1024);
+			if (file_lenth >= 1024)
+			{
+				proc_lenth = 1024;
+				file_lenth -= 1024;
+			}
+			else if (file_lenth < 1024)
+			{
+				proc_lenth = file_lenth;
+				file_lenth = 0;
+			}
+
+			for (int i = 0; i < proc_lenth; i++)
+			{
+				if (proc_buf[i] == '\n')	//LF前加CR
+				{
+					newfile << '\r';
+					newfile << '\n';
+				}
+				else if (proc_buf[i] == '\r')
+				{
+					newfile << '\r';		//CR后加NULL
+					newfile << '\0';
+				}
+				else 
+					newfile<< proc_buf[i];
+			}
+		}
+		newfile.close();
+		return newfilename;
+	}
 
 private:
 	//反转高低位
